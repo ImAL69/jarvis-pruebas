@@ -1,0 +1,13 @@
+{
+  "servers": [
+    {
+      "name": "filesystem_safe",
+      "transport": "stdio",
+      "command": "/absolute/path/to/mcp-filesystem-server",
+      "args": [
+        "--root",
+        "/absolute/path/to/notes"
+      ]
+    }
+  ]
+}
