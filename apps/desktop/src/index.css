@@ -1,7 +1,5 @@
-:root {
-  color-scheme: light;
-}
-
-body {
-  margin: 0;
-}
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap');
+:root { color-scheme: dark; font-family: 'Outfit', sans-serif; color: #f8f4ff; background: #120d1c; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button { font: inherit; }

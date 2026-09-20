@@ -81,6 +81,7 @@ npm run dev
 - `GET /actions`
 - `POST /action`
 - `POST /confirm/{request_id}`
+- `GET /reminders/due` (avisos pendientes para el popup local)
 
 Acciones registradas:
 
@@ -88,6 +89,23 @@ Acciones registradas:
 - `list_allowed_files`
 - `create_note` (confirmación requerida)
 - `open_url` (confirmación requerida)
+- `create_reminder` (confirmación requerida, persistente en SQLite)
+- `list_reminders`
+
+## Voz, recordatorios y límites del navegador
+
+En el frontend, **Activar micrófono** solicita permiso una vez, habilita la escucha
+continua de la frase `Jarvis, despierta` y pide permiso para notificaciones del
+navegador. La conversación de ElevenLabs se inicia al detectar la frase. Los
+navegadores pueden pausar el reconocimiento continuo al bloquear la pestaña o al
+aplicar políticas de ahorro de energía; en ese caso se puede iniciar la conversación
+manualmente. El micrófono no se puede activar de forma silenciosa antes del permiso
+explícito del usuario.
+
+Cuando JARVIS usa `create_reminder`, el gateway guarda el recordatorio en la base
+SQLite configurada por `JARVIS_AUDIT_DB`. El frontend consulta los vencidos cada
+15 segundos y muestra una notificación del sistema si el permiso está concedido.
+La herramienta sigue requiriendo confirmación porque crea un compromiso persistente.
 
 ## Seguridad aplicada
 
@@ -109,3 +127,5 @@ configuración local versionada (`config/mcp.json`) y deja conexión real pendie
 - Conectar cliente MCP real (STDIO/HTTP streamable) con allowlist por servidor.
 - UX de confirmación humana explícita en frontend para `/confirm/{request_id}`.
 - Firmado de sesión ElevenLabs vía backend para entornos productivos.
+- Empaquetar el frontend y gateway como ejecutable de escritorio (Tauri o Electron)
+  reutilizando esta misma API local y permisos explícitos.

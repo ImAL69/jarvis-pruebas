@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import sqlite3
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -236,3 +237,42 @@ def test_no_shell_endpoint_when_disabled(tmp_path: Path) -> None:
     response = client.post("/shell", json={"command": "echo hi"})
 
     assert response.status_code == 404
+
+
+def test_reminder_is_persisted_and_delivered_once(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    client = TestClient(create_app(settings))
+    remind_at = (datetime.now(UTC) + timedelta(minutes=5)).isoformat()
+
+    pending = client.post(
+        "/action",
+        json={"action": "create_reminder", "arguments": {"title": "Llamar a mamá", "remind_at": remind_at}},
+    ).json()
+
+    assert pending["ok"] is True
+    reminder_id = pending["result"]["id"]
+    assert client.get("/reminders/due").json()["reminders"] == []
+    with sqlite3.connect(settings.audit_db) as conn:
+        conn.execute(
+            "UPDATE reminders SET remind_at = ? WHERE id = ?",
+            ((datetime.now(UTC) - timedelta(minutes=1)).isoformat(), reminder_id),
+        )
+
+    first = client.get("/reminders/due").json()["reminders"]
+    assert len(first) == 1
+    assert client.post(f"/reminders/{reminder_id}/delivered").json()["ok"] is True
+    assert client.get("/reminders/due").json()["reminders"] == []
+
+
+def test_reminder_accepts_local_naive_iso_datetime(tmp_path: Path) -> None:
+    settings = build_settings(tmp_path)
+    client = TestClient(create_app(settings))
+    remind_at = (datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=5)).isoformat()
+
+    response = client.post(
+        "/action",
+        json={"action": "create_reminder", "arguments": {"title": "Sin zona", "remind_at": remind_at}},
+    )
+
+    assert response.json()["ok"] is True
+    assert response.json()["result"]["title"] == "Sin zona"

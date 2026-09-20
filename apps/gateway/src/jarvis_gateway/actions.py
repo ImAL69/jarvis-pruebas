@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 import webbrowser
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -9,6 +10,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, StringConstraints
 
 from .policy import resolve_allowed_path
+from .reminders import ReminderStore
 from .settings import Settings
 
 RiskLevel = Literal["low", "medium", "high"]
@@ -48,6 +50,17 @@ class OpenUrlArgs(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     url: HttpUrl
+
+
+class CreateReminderArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=160)
+    remind_at: datetime
+
+
+class ListRemindersArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 HandlerType = Callable[[ActionContext, BaseModel], Awaitable[dict[str, Any]]]
@@ -116,6 +129,23 @@ async def _open_url_handler(_: ActionContext, args: BaseModel) -> dict[str, Any]
     return {"url": str(parsed.url), "opened": bool(opened)}
 
 
+async def _create_reminder_handler(ctx: ActionContext, args: BaseModel) -> dict[str, Any]:
+    parsed = CreateReminderArgs.model_validate(args.model_dump())
+    remind_at = parsed.remind_at
+    if remind_at.tzinfo is None:
+        # Voice clients often send local wall-clock time without an offset.
+        # Interpret it in the gateway's local timezone, then store UTC.
+        local_timezone = datetime.now().astimezone().tzinfo
+        remind_at = remind_at.replace(tzinfo=local_timezone).astimezone(UTC)
+    if remind_at <= datetime.now(UTC):
+        raise ActionError("La fecha del recordatorio debe estar en el futuro")
+    return ReminderStore(ctx.settings.audit_db).create(uuid.uuid4().hex, parsed.title, remind_at)
+
+
+async def _list_reminders_handler(ctx: ActionContext, _: BaseModel) -> dict[str, Any]:
+    return {"reminders": ReminderStore(ctx.settings.audit_db).upcoming()}
+
+
 def build_action_registry(settings: Settings) -> dict[str, ActionDefinition]:
     return {
         "get_time": ActionDefinition(
@@ -153,5 +183,23 @@ def build_action_registry(settings: Settings) -> dict[str, ActionDefinition]:
             requires_confirmation=settings.require_confirmation,
             timeout_seconds=4,
             handler=_open_url_handler,
+        ),
+        "create_reminder": ActionDefinition(
+            name="create_reminder",
+            description="Programa un recordatorio persistente y seguro",
+            args_model=CreateReminderArgs,
+            risk="medium",
+            requires_confirmation=False,
+            timeout_seconds=4,
+            handler=_create_reminder_handler,
+        ),
+        "list_reminders": ActionDefinition(
+            name="list_reminders",
+            description="Lista recordatorios pendientes",
+            args_model=ListRemindersArgs,
+            risk="low",
+            requires_confirmation=False,
+            timeout_seconds=3,
+            handler=_list_reminders_handler,
         ),
     }

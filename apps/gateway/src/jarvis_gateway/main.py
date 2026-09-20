@@ -22,6 +22,7 @@ from .models import (
     ToolError,
 )
 from .policy import PolicyError
+from .reminders import ReminderStore
 from .settings import Settings, get_settings
 
 
@@ -62,6 +63,7 @@ def create_app(
     registry = action_registry or build_action_registry(app_settings)
     audit = AuditLogger(app_settings.audit_db)
     pending_confirmations: dict[str, PendingConfirmation] = {}
+    reminder_store = ReminderStore(app_settings.audit_db)
 
     async def require_local_token(
         authorization: Annotated[str | None, Header()] = None,
@@ -144,6 +146,18 @@ def create_app(
                 for action in registry.values()
             ]
         }
+
+    @app.get("/reminders/due", dependencies=[Depends(require_local_token)])
+    async def due_reminders() -> dict[str, object]:
+        return {"reminders": reminder_store.due_without_delivering()}
+
+    @app.get("/reminders/upcoming", dependencies=[Depends(require_local_token)])
+    async def upcoming_reminders() -> dict[str, object]:
+        return {"reminders": reminder_store.upcoming()}
+
+    @app.post("/reminders/{reminder_id}/delivered", dependencies=[Depends(require_local_token)])
+    async def mark_reminder_delivered(reminder_id: str) -> dict[str, object]:
+        return {"ok": reminder_store.mark_delivered(reminder_id)}
 
     @app.post("/action", response_model=ActionResponse, dependencies=[Depends(require_local_token)])
     async def run_action(request: ActionRequest) -> ActionResponse:
