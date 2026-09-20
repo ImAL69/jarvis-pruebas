@@ -1,0 +1,19 @@
+version: 1
+allowed_roots:
+  - /absolute/path/to/notes
+enabled_actions:
+  - get_time
+  - list_allowed_files
+  - create_note
+  - open_url
+require_confirmation:
+  create_note: true
+  open_url: true
+timeouts_seconds:
+  get_time: 2
+  list_allowed_files: 3
+  create_note: 4
+  open_url: 4
+limits:
+  max_note_filename_len: 80
+  max_note_content_bytes: 4096
